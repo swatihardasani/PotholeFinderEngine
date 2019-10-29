@@ -1,5 +1,4 @@
 
-
 DROP TRIGGER IF EXISTS `potholeEventTrigger`;
 
 
@@ -14,7 +13,7 @@ BEGIN
     SET @pLong = new.longitude;
     SET @pDepth = new.depth;
     SET @userId = new.user_id;
-    SET @pTimestamp = current_time();
+    SET @pTimestamp = current_timestamp();
     SET @MinLatitude = 99999.00;
     SET @MaxLatitude = -99999.0;
     SET @MinLongitude = 99999.0;
@@ -24,59 +23,56 @@ BEGIN
     SET @LatestTimestamp = null;
     SET @TotalDepthRecorded = null;
 
-    SET @isNewPothole = true;
+    SET @isNewPothole = 1;
 
-    SELECT
-        new.latitude,
-        new.longitude,
-        new.depth,
-        new.user_id,
-        new.id,
-        b.MinLatitude,
-        b.MaxLatitude,
-        b.MinLongitude,
-        b.MaxLongitude,
-        b.PotholeID,
-        b.VehiclesCrossed,
-        b.LatestTimestamp,
-        b.TotalDepthRecorded
+        SELECT
+            new.latitude,
+            new.longitude,
+            new.depth,
+            new.user_id,
+            new.id,
+            b.MinLatitude,
+            b.MaxLatitude,
+            b.MinLongitude,
+            b.MaxLongitude,
+            b.PotholeID,
+            b.VehiclesCrossed,
+            b.LatestTimestamp,
+            b.TotalDepthRecorded,
+            0
 
-    INTO @pLat, @pLong, @pDepth, @userId, @pId, @MinLatitude, @MaxLatitude, @MinLongitude, @MaxLongitude, @PotholeId, @VehiclesCrossed, @LatestTimestamp, @TotalDepthRecorded
+        INTO @pLat, @pLong, @pDepth, @userId, @pId, @MinLatitude, @MaxLatitude, @MinLongitude, @MaxLongitude, @PotholeId, @VehiclesCrossed, @LatestTimestamp, @TotalDepthRecorded, @isNewPothole
 
-    FROM  PotholeSummary_T b
+        FROM  PotholeSummary_T b
 
-    WHERE (1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MinLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MinLatitude)) * power((sin(radians((b.MinLongitude - new.longitude) / 2))),2))) < 10.0
-        OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MaxLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MaxLatitude)) * power((sin(radians((b.MinLongitude - new.longitude) / 2))),2))) < 10.0
-        OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MinLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MinLatitude)) * power((sin(radians((b.MaxLongitude - new.longitude) / 2))),2))) < 10.0
-        OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MaxLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MaxLatitude)) * power((sin(radians((b.MaxLongitude - new.longitude) / 2))),2))) < 10.0 )
+        WHERE (1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MinLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MinLatitude)) * power((sin(radians((b.MinLongitude - new.longitude) / 2))),2))) < 10.0
+            OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MaxLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MaxLatitude)) * power((sin(radians((b.MinLongitude - new.longitude) / 2))),2))) < 10.0
+            OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MinLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MinLatitude)) * power((sin(radians((b.MaxLongitude - new.longitude) / 2))),2))) < 10.0
+            OR 1609.34 * 2 * 3961 * asin(sqrt(power((sin(radians((b.MaxLatitude - new.latitude) / 2))), 2) + cos(radians(new.latitude)) * cos(radians(b.MaxLatitude)) * power((sin(radians((b.MaxLongitude - new.longitude) / 2))),2))) < 10.0 )
 
     LIMIT 1;
 
     IF @pLat < @MinLatitude THEN
         SET @MinLatitude = @pLat;
-        SET @isNewPothole = false;
     END IF;
 
     IF @pLat > @MaxLatitude THEN
         SET @MaxLatitude = @pLat;
-        SET @isNewPothole = false;
     END IF;
 
     IF @pLong < @MinLongitude THEN
         SET @MinLongitude = @pLong;
-        SET @isNewPothole = false;
     END IF;
 
     IF @pLong > @MaxLongitude THEN
         SET @MaxLongitude = @pLong;
-        SET @isNewPothole = false;
     END IF;
 
-    IF TIMESTAMPDIFF(SECOND, new.Timestamp, @LatestTimestamp)  > 0
-    THEN SET @LatestTimestamp = new.Timestamp;
+    IF TIMESTAMPDIFF(MICROSECOND, @LatestTimestamp, @pTimestamp)  > 0 THEN
+		SET @LatestTimestamp = @pTimestamp;
     END IF;
 
-    IF @isNewPothole = true
+    IF @isNewPothole = 1
     THEN
         INSERT INTO `db_example`.`PotholeSummary_T`
         (`MinLatitude`,
@@ -92,11 +88,11 @@ BEGIN
         (@pLat,
          @pLat,
          @pLong,
-         @pLong ,
+         @pLong,
          @pDepth,
          1,
          @pDepth,
-         @LatestTimestamp,
+         current_timestamp(),
          null);
     ELSE
         UPDATE
@@ -111,9 +107,8 @@ BEGIN
             TotalDepthRecorded = @TotalDepthRecorded + @pDepth,
             VehiclesCrossed = @VehiclesCrossed + 1
         WHERE
-                PotholeID = @PotholeID;
+			PotholeID = @PotholeID;
     END IF;
-
 
 END#
 
